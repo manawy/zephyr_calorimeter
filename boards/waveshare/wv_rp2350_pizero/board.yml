@@ -1,0 +1,6 @@
+board:
+  name: wv_rp2350_pizero
+  full_name: Waveshare RP2350 PiZero
+  vendor: Waveshare
+  socs:
+    - name: rp2350b

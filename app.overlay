@@ -1,11 +1,19 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-/ {
-	aliases {
-		led0 = &led0;
-		led1 = &led1;
-	};
 
+
+/ {
+	zephyr,user {
+		io-channels = <&i2c_adc 0>;
+	};
+    chosen {
+        zephyr,console = &cdc_acm_uart0;
+    };
+	aliases {
+		ledok = &led0;
+		ledbusy = &led1;
+		fluxsensor = &i2c_adc;
+	};
 	leds {
 		compatible = "gpio-leds";
 
@@ -20,6 +28,58 @@
 	};
 };
 
-&gpio0 {
+
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+&pinctrl {
+	i2c0_custom: i2c0_custom {
+		group1 {
+			pinmux = <I2C0_SDA_P0>, <I2C0_SCL_P1>;
+			input-enable;
+			input-schmitt-enable;
+		};
+	};
+
+
+};
+
+&i2c0 {
+	status = "okay";
+	pinctrl-0 = <&i2c0_custom>;
+
+	i2c_adc: ads1115@48 {
+		status = "okay";
+		compatible = "ti,ads1115";
+		reg = <0x48>;
+		#io-channel-cells = <1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		channel@0 {
+			reg = <0>;
+			zephyr,gain = "ADC_GAIN_2";
+			zephyr,reference = "ADC_REF_INTERNAL";
+			zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+			zephyr,differential;
+			zephyr,input-positive = <0>;
+			zephyr,input-negative = <3>;
+			zephyr,resolution = <16>;
+		};
+	};
+};
+
+&spi1 {
+	status = "okay";
+};
+
+&sdhc0 {
+	sdmmc {
+		compatible = "zephyr,sdmmc-disk";
+		status = "okay";
+		//disk-name = "SD";
+	};
 	status = "okay";
 };

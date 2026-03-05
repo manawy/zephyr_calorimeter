@@ -1,0 +1,2 @@
+config BOARD_WV_RP2350_PIZERO
+	select SOC_RP2350B_M33
