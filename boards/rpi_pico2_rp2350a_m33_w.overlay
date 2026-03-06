@@ -1,0 +1,100 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+
+
+/ {
+    zephyr,user {
+        io-channels = <&i2c_adc 0>;
+    };
+    chosen {
+        zephyr,console = &cdc_acm_uart0;
+    };
+    aliases {
+        rtc = &ds3231_rtc;
+        ledok = &led0;
+        ledbusy = &led1;
+        fluxsensor = &i2c_adc;
+    };
+    leds {
+        compatible = "gpio-leds";
+
+        led0: led_0 {
+            gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+            label = "LED 0";
+        };
+        led1: led_1 {
+            gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+            label = "LED 1";
+        };
+    };
+};
+
+
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+&pinctrl {
+
+};
+
+&i2c0 {
+    status = "okay";
+
+    i2c_adc: ads1115@48 {
+        status = "okay";
+        compatible = "ti,ads1115";
+        reg = <0x48>;
+        #io-channel-cells = <1>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+        channel@0 {
+            reg = <0>;
+            zephyr,gain = "ADC_GAIN_2";
+            zephyr,reference = "ADC_REF_INTERNAL";
+            zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+            zephyr,differential;
+            zephyr,input-positive = <0>;
+            zephyr,input-negative = <3>;
+            zephyr,resolution = <16>;
+        };
+    };
+
+    ds3231: ds3231@68 {
+        compatible = "maxim,ds3231-mfd";
+        reg = <0x68>;
+        status = "okay";
+
+        ds3231_sensor: ds3231_sensor {
+                compatible = "maxim,ds3231-sensor";
+                status = "okay";
+        };
+
+        ds3231_rtc: ds3231_rtc {
+                compatible = "maxim,ds3231-rtc";
+                status = "okay";
+
+                isw-gpios = <&gpio0 6 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+                //freq-32khz-gpios = <&gpio0 33 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+        };
+};
+};
+
+&spi0 {
+        status = "okay";
+        cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+
+        sdhc0: sdhc@0 {
+                compatible = "zephyr,sdhc-spi-slot";
+                reg = <0>;
+                status = "okay";
+                mmc {
+                    compatible = "zephyr,sdmmc-disk";
+                    disk-name = "SD";
+                    status = "okay";
+                };
+                spi-max-frequency = <24000000>;
+        };
+};
