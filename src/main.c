@@ -21,9 +21,6 @@ BUILD_ASSERT(DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_console), zephyr_cdc_acm_uart),
 static const struct gpio_dt_spec led_ok = GPIO_DT_SPEC_GET(DT_ALIAS(ledok), gpios);
 static const struct gpio_dt_spec led_busy = GPIO_DT_SPEC_GET(DT_ALIAS(ledbusy), gpios);
 
-//static const struct adc_dt_spec fluxsensor = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
-
-//static const struct adc_dt_spec fluxsensor = //ADC_DT_SPEC_GET_BY_IDX(DT_ALIAS(flux_sensor), 0);
 
 int init_leds() {
 	int ret;

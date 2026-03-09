@@ -9,16 +9,23 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/adc.h>
 
+// Configuration
+// -------------
 
+// time between measure
+#define TIME_BETWEEN_MEASURE K_SECONDS(2)
+
+// Logging
+// --------
 LOG_MODULE_REGISTER(heat_sensor, LOG_LEVEL_INF);
 
+// Devices from DT
+// ---------------
 static const struct adc_dt_spec fluxsensor = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
-static struct adc_sequence sequence;
-
 const struct device *const rtc = DEVICE_DT_GET(DT_ALIAS(rtc));
 
-static uint16_t buf;
-
+/* Get time from the RTC module
+ */
 static int get_date_time(struct rtc_time* tm) {
     int ret = rtc_get_time(rtc, tm);
     if (ret < 0) {
@@ -28,33 +35,35 @@ static int get_date_time(struct rtc_time* tm) {
     return 0;
 }
 
-bool measure_heat(struct heat_measure_t *measure) {
-    int ret = adc_read_dt(&fluxsensor, &sequence);
+/* @brief Measure heat flow
+ *
+ * @param sequence Structure defining an ADC sampling sequence
+ * @param measure  Structure contenant le résultat
+ *
+ * @return True if measure and conversion was successful
+ */
+bool measure_heat(struct adc_sequence* sequence, struct heat_measure_t *measure) {
+    int ret = adc_read_dt(&fluxsensor, sequence);
     if (ret < 0) {
         LOG_ERR("Could not read channel %d\n", ret);
-    }
-    struct rtc_time tm;
-    get_date_time(&tm);
-
-    int32_t val_uv = (int32_t)((int16_t) buf);
-    ret = adc_raw_to_microvolts_dt(&fluxsensor, &val_uv);
-    /* conversion to mV may not be supported, skip if not */
-    if (ret < 0) {
-        LOG_ERR(" (value in mV not available)\n");
-        measure->uv = 0;
         return false;
-    } else {
-        LOG_PRINTK(" = %"PRId32" uV\n", val_uv);
     }
-
-    measure->uv = val_uv;
-    measure->time = tm;
+    get_date_time(&(measure->time));
+    measure->uv  = (int32_t)((int16_t) buf);
+    ret = adc_raw_to_microvolts_dt(&fluxsensor, &(measure->uv));
+    LOG_PRINTK(" = %"PRId32" uV\n", measure->uv);
     return true;
 }
 
-static int init_adc() {
+/* @brief Initialize the ADC
+ *
+ * @param sequence Structure defining an ADC sampling sequence
+ *
+ * @return 0 si initialization succesful, <0 if error
+ */
+static int init_adc(struct adc_sequence* sequence) {
     /* Configure channels individually prior to sampling. */
-    adc_sequence_init_dt(&fluxsensor, &sequence);
+    adc_sequence_init_dt(&fluxsensor, sequence);
     if (!adc_is_ready_dt(&fluxsensor)) {
         LOG_ERR("ADC controller device %s not ready\n", fluxsensor.dev->name);
         return -1;
@@ -70,17 +79,22 @@ static int init_adc() {
 
 void heat_sensor_thread(void *p1, void *p2, void *p3) {
     struct k_fifo *ht_fifo = (struct k_fifo*) p1;
+    uint16_t buf; // The main buffer
 
+    struct adc_sequence sequence;
     sequence.buffer = &buf;
     sequence.buffer_size = sizeof(buf);/* buffer size in bytes, not number of samples */
-    init_adc();
+
+    // Initialize The ADC
+    init_adc(&sequence);
 
     while (1) {
+        // TODO use ISR
         struct heat_measure_t measure;
-        measure_heat(&measure);
+        measure_heat(&sequence, &measure);
 
         k_fifo_put(ht_fifo, &measure);
 
-        k_sleep(K_SECONDS(2));
+        k_sleep(TIME_BETWEEN_MEASURE);
     }
 }
