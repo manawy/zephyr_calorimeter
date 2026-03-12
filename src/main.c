@@ -7,9 +7,15 @@
 #include <zephyr/sys/printk.h>
 
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/input/input.h>
+#include <zephyr/device.h>
 
+#include "app.h"
 #include "heat_sensor.h"
 #include "write.h"
+#include "zephyr/dt-bindings/input/input-event-codes.h"
+
+
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
@@ -21,6 +27,7 @@ BUILD_ASSERT(DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_console), zephyr_cdc_acm_uart),
 static const struct gpio_dt_spec led_ok = GPIO_DT_SPEC_GET(DT_ALIAS(ledok), gpios);
 static const struct gpio_dt_spec led_busy = GPIO_DT_SPEC_GET(DT_ALIAS(ledbusy), gpios);
 
+//static const struct device *const btn_start = DEVICE_DT_GET(DT_ALIAS(btnstart));
 
 int init_leds() {
 	int ret;
@@ -52,8 +59,31 @@ struct k_thread write_thread_data;
 
 K_FIFO_DEFINE(ht_fifo);
 
+INIT_APPSTATE(app_state);
+
+static void btn_start_cb(struct input_event *evt, void *user_data) {
+	app_state_t* app_state = (app_state_t *) user_data;
+	if (evt->sync == 0) {
+		return;
+	}
+	if (evt->code == INPUT_KEY_0) {
+		if (evt->value == 0) {
+			if (app_state->measurement_state == OngoingMeasurement) {
+				app_state->measurement_state = StopMeasurement;
+			}
+			else if (app_state->measurement_state == StoppedMeasurement) {
+				app_state->measurement_state = StartMeasurement;
+			}
+		}
+	}
+}
+INPUT_CALLBACK_DEFINE(NULL, btn_start_cb, &app_state);
+
+
 int main(void)
 {
+
+
 	int ret;
 	bool led_state = true;
 
@@ -83,7 +113,7 @@ int main(void)
 		&heatsensor_thread_data, heatsensor_stack_area,
 		K_THREAD_STACK_SIZEOF(heatsensor_stack_area),
 		heat_sensor_thread,
-		(void *) &ht_fifo, NULL, NULL,
+		(void *) &ht_fifo, (void *) &app_state, NULL,
 		5, 0, K_NO_WAIT);
 	LOG_INF("Start heat sensor thread");
 	k_tid_t write_tid = k_thread_create(
@@ -95,30 +125,23 @@ int main(void)
 	LOG_INF("Start write thread");
 
 	while (1) {
-		ret = gpio_pin_toggle_dt(&led_ok);
-		if (ret < 0) {
-			return 0;
-		}
-		ret = gpio_pin_toggle_dt(&led_busy);
-		if (ret < 0) {
-			return 0;
-		}
-
-		led_state = !led_state;
-		//LOG_PRINTK("LED state: %s\n", led_state ? "ON" : "OFF");
-
-		k_sleep(K_SECONDS(1));
-
-		ret = gpio_pin_toggle_dt(&led_ok);
-		if (ret < 0) {
-			return 0;
-		}
-		ret = gpio_pin_toggle_dt(&led_busy);
-		if (ret < 0) {
-			return 0;
-		}
-
-		k_msleep(SLEEP_TIME_MS);
+		switch (app_state.measurement_state) {
+			case StartMeasurement:
+				LOG_PRINTK("--- Start Measurement ---\n");
+				gpio_pin_configure_dt(&led_busy, GPIO_OUTPUT_ACTIVE);
+				gpio_pin_configure_dt(&led_ok, GPIO_OUTPUT_INACTIVE);
+				app_state.measurement_state = OngoingMeasurement;
+				break;
+			case StopMeasurement:
+				LOG_PRINTK("--- Stop Measurement ---\n");
+				gpio_pin_configure_dt(&led_busy, GPIO_OUTPUT_INACTIVE);
+				gpio_pin_configure_dt(&led_ok, GPIO_OUTPUT_ACTIVE);
+				app_state.measurement_state = StoppedMeasurement;
+				break;
+			default:
+				break;
+		};
+		k_sleep(K_MSEC(10));
 	}
 
 	return 0;

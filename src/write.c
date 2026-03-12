@@ -1,4 +1,5 @@
 #include "write.h"
+#include "heat_sensor.h"
 
 #include <string.h>
 #include <zephyr/kernel.h>
@@ -8,7 +9,6 @@
 #include <zephyr/fs/fs.h>
 #include <zephyr/drivers/uart.h>
 
-#include "heat_sensor.h"
 
 LOG_MODULE_REGISTER(write_thread, LOG_LEVEL_INF);
 
@@ -64,7 +64,7 @@ static struct fs_mount_t mp = {
 #define SOME_REQUIRED_LEN MAX(sizeof(SOME_FILE_NAME), sizeof(SOME_DIR_NAME))
 
 
-static bool write_to_file(const char *base_path, struct heat_measure_t *data)
+static bool write_to_file(const char *base_path, heat_measure_t *data)
 {
     char path[MAX_PATH];
     struct fs_file_t file;
@@ -159,7 +159,7 @@ void write_thread(void *p1, void *p2, void *p3) {
     while (1) {
         /* Try to unmount and remount the disk */
         if (!k_fifo_is_empty(ht_fifo)) {
-            struct heat_measure_t *data = NULL;
+            heat_measure_t *data = NULL;
             data = k_fifo_get(ht_fifo, K_MSEC(100));
             if (data != NULL) {
                 bool has_written = write_to_file(disk_mount_pt, data);

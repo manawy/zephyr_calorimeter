@@ -1,4 +1,5 @@
 #include "heat_sensor.h"
+#include "app.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -42,14 +43,14 @@ static int get_date_time(struct rtc_time* tm) {
  *
  * @return True if measure and conversion was successful
  */
-bool measure_heat(struct adc_sequence* sequence, struct heat_measure_t *measure) {
+bool measure_heat(struct adc_sequence* sequence, heat_measure_t *measure) {
     int ret = adc_read_dt(&fluxsensor, sequence);
     if (ret < 0) {
         LOG_ERR("Could not read channel %d\n", ret);
         return false;
     }
     get_date_time(&(measure->time));
-    measure->uv  = (int32_t)((int16_t) buf);
+    measure->uv  = (int32_t)(*((int16_t*) sequence->buffer));
     ret = adc_raw_to_microvolts_dt(&fluxsensor, &(measure->uv));
     LOG_PRINTK(" = %"PRId32" uV\n", measure->uv);
     return true;
@@ -78,7 +79,8 @@ static int init_adc(struct adc_sequence* sequence) {
 }
 
 void heat_sensor_thread(void *p1, void *p2, void *p3) {
-    struct k_fifo *ht_fifo = (struct k_fifo*) p1;
+    struct k_fifo* ht_fifo = (struct k_fifo*) p1;
+    app_state_t* app_state = (app_state_t*) p2;
     uint16_t buf; // The main buffer
 
     struct adc_sequence sequence;
@@ -90,10 +92,12 @@ void heat_sensor_thread(void *p1, void *p2, void *p3) {
 
     while (1) {
         // TODO use ISR
-        struct heat_measure_t measure;
-        measure_heat(&sequence, &measure);
+        if (app_state->measurement_state == OngoingMeasurement) {
+            heat_measure_t measure;
+            measure_heat(&sequence, &measure);
 
-        k_fifo_put(ht_fifo, &measure);
+            k_fifo_put(ht_fifo, &measure);
+        }
 
         k_sleep(TIME_BETWEEN_MEASURE);
     }
